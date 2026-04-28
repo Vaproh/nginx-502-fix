@@ -78,6 +78,3 @@ This is a common production issue when:
 * backend fails silently
 
 Understanding the debugging process is more important than just applying the fix.
-
-Now paste it, push it, and move to repo #2 before you start tweaking commas like a perfectionist 💅🏼
-```
