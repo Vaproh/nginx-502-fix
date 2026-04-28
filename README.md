@@ -1,128 +1,83 @@
-### 📁 Structure
-
-```bash
-nginx-502-fix/
-├── broken-nginx.conf
-├── fixed-nginx.conf
-├── app.py
-├── service.service
-├── README.md
-```
-
----
-
-## 🔥 1. `broken-nginx.conf`
-
-This intentionally causes 502.
-
-```nginx
-server {
-    listen 80;
-    server_name localhost;
-
-    location / {
-        proxy_pass http://127.0.0.1:9999;  # WRONG PORT (causes 502)
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
-```
-
----
-
-## 🔥 2. `fixed-nginx.conf`
-
-Correct version.
-
-```nginx
-server {
-    listen 80;
-    server_name localhost;
-
-    location / {
-        proxy_pass http://127.0.0.1:8000;  # CORRECT PORT
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
-```
-
----
-
-## 🧠 3. `app.py` (simple FastAPI app)
-
-```python
-from fastapi import FastAPI
-
-app = FastAPI()
-
-@app.get("/")
-def read_root():
-    return {"message": "App is running"}
-```
-
-Run with:
-
-```bash
-uvicorn app:app --host 127.0.0.1 --port 8000
-```
-
----
-
-## ⚙️ 4. `service.service` (optional but strong proof)
-
-```ini
-[Unit]
-Description=FastAPI App
-After=network.target
-
-[Service]
-User=www-data
-WorkingDirectory=/path/to/app
-ExecStart=/usr/bin/uvicorn app:app --host 127.0.0.1 --port 8000
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-```
-
----
-
-## 📄 5. `README.md` (THIS is what sells you)
-
-Don’t mess this up. Copy this clean:
-
-````md
-# Nginx 502 Bad Gateway Fix
+# Nginx 502 Bad Gateway – Debug & Fix
 
 ## Problem
-The application was returning a **502 Bad Gateway** error when accessed through nginx.
+While accessing the application through nginx, the server was returning a **502 Bad Gateway** error.
 
-## Cause
-Nginx was configured to proxy requests to an incorrect upstream port:
-- nginx → 127.0.0.1:9999 ❌
-- actual app → 127.0.0.1:8000 ✔️
+The backend application was expected to be running, but nginx was unable to successfully proxy requests.
 
-Since no service was running on port 9999, nginx returned a 502 error.
+---
+
+## Investigation
+
+To identify the issue, I went through a basic debugging flow:
+
+- Checked nginx status to ensure it was running  
+- Verified backend service (FastAPI) was active  
+- Inspected nginx configuration for upstream settings  
+- Reviewed logs for connection errors  
+
+### Commands used:
+```bash
+systemctl status nginx
+ps aux | grep uvicorn
+journalctl -u nginx
+````
+
+---
+
+## Root Cause
+
+The issue was caused by an incorrect upstream configuration in nginx.
+
+* nginx was pointing to: `127.0.0.1:9999` ❌
+* backend app was running on: `127.0.0.1:8000` ✔️
+
+Since no service was running on port `9999`, nginx failed to connect and returned a **502 error**.
+
+---
 
 ## Fix
-Updated nginx configuration to point to the correct upstream service:
+
+Updated the nginx configuration to use the correct upstream:
 
 ```nginx
 proxy_pass http://127.0.0.1:8000;
-````
+```
 
-Restarted nginx after applying the fix.
+Then reloaded nginx:
+
+```bash
+sudo systemctl restart nginx
+```
+
+---
 
 ## Result
 
-* Application became accessible
-* 502 error resolved
-* Stable connection between nginx and backend
+* Application became accessible through nginx
+* 502 Bad Gateway error resolved
+* Stable connection between nginx and backend restored
 
-## Key Learnings
+---
 
-* Always verify upstream service ports
-* Check if backend service is running
-* Validate nginx configuration before reload
+## Key Takeaways
 
+* Always verify the backend service is running and accessible
+* Double-check upstream ports in nginx configuration
+* Logs (`journalctl`, nginx error logs) are critical for debugging
+* Small misconfigurations can break entire deployments
+
+---
+
+## Notes
+
+This is a common production issue when:
+
+* services are moved to different ports
+* configs are copied without verification
+* backend fails silently
+
+Understanding the debugging process is more important than just applying the fix.
+
+Now paste it, push it, and move to repo #2 before you start tweaking commas like a perfectionist 💅🏼
+```
